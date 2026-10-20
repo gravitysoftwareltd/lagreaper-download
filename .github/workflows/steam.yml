@@ -1,0 +1,57 @@
+# Uploads each published release to Steam (app 5457040, depot 5457041).
+#
+# Valve doesn't allow scripts to set a build live on `default`, so builds go
+# live on a beta branch (`staging` unless you pick another). Test there, then
+# promote to default in Steamworks: SteamPipe > Builds > Set build live.
+#
+# Required repo secrets:
+#   STEAM_USERNAME    the Steam build account's login name
+#   STEAM_CONFIG_VDF  base64 of steamcmd's config/config.vdf after logging in
+#                     once with that account (lets CI skip Steam Guard)
+
+name: Push to Steam
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to upload (e.g. v0.5.30)
+        required: true
+      branch:
+        description: Steam beta branch to set live (empty = upload only)
+        default: staging
+
+permissions:
+  contents: read
+
+concurrency:
+  group: steam-upload
+  cancel-in-progress: false
+
+jobs:
+  steam:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - name: Download release build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "$TAG" -R "$GITHUB_REPOSITORY" -p "LagReaper-Full-win-x64.zip" -D dl
+          unzip -q dl/LagReaper-Full-win-x64.zip -d dl
+          test -f dl/LagReaper-Full/LagReaper.exe
+          ls -la dl/LagReaper-Full
+
+      - name: Upload to Steam
+        uses: game-ci/steam-deploy@v3
+        with:
+          username: ${{ secrets.STEAM_USERNAME }}
+          configVdf: ${{ secrets.STEAM_CONFIG_VDF }}
+          appId: 5457040
+          buildDescription: LagReaper ${{ env.TAG }}
+          rootPath: dl/LagReaper-Full
+          depot1Path: .
+          releaseBranch: ${{ github.event_name == 'release' && 'staging' || inputs.branch }}
