@@ -41,7 +41,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release download "$TAG" -R "$GITHUB_REPOSITORY" -p "LagReaper-Full-win-x64.zip" -D dl
-          unzip -q dl/LagReaper-Full-win-x64.zip -d dl
+          # Release zips use Windows backslash paths; unzip warns (exit 1) but extracts fine.
+          unzip -q dl/LagReaper-Full-win-x64.zip -d dl || [ $? -eq 1 ]
           test -f dl/LagReaper-Full/LagReaper.exe
           ls -la dl/LagReaper-Full
 
